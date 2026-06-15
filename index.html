@@ -759,7 +759,39 @@ window.fetchPosts = async function(){
   return data;
 };
 
-renderMembers();renderMultiview();renderPosts('all');renderHomePosts();renderYoutube('all');renderRanking();renderCalendar();renderAuth();renderAboutCafe();renderContacts();
+function renderHomePosts() {
+  const el = document.getElementById('home-posts');
+  if (!el) return;
+
+  if (!postsCache || postsCache.length === 0) {
+    el.innerHTML = `<div class="post-card" style="text-align:center;color:var(--text-muted)">게시글이 없습니다.</div>`;
+    return;
+  }
+
+  el.innerHTML = postsCache.slice(0, 3).map(p => {
+    const m = getMember(p.member);
+    return `
+      <div class="post-card" style="margin-bottom:8px">
+        <div class="post-header">
+          <div class="post-avatar" style="background:linear-gradient(135deg,${m.color[0]},${m.color[1]})">${m.emoji}</div>
+          <div class="post-meta">
+            <div class="post-author">${p.member}</div>
+            <div class="post-time">${p.date || ''}</div>
+          </div>
+          <span class="tag">📡 SOOP</span>
+        </div>
+        <div class="post-content">${p.title || p.content || '(내용 없음)'}</div>
+        ${p.url ? `<a href="${p.url}" target="_blank" style="color:var(--green-light);font-size:12px;text-decoration:none">원문 보기 ↗</a>` : ''}
+      </div>
+    `;
+  }).join('') + `<div style="text-align:center;margin-top:7px"><button class="btn btn-outline" onclick="showPage('posts')">게시글 더 보기 →</button></div>`;
+}
+
+function renderPosts(tab = 'all') {
+  renderRealPosts(postsCache || [], tab);
+}
+
+renderMembers();renderMultiview();renderYoutube('all');renderRanking();renderCalendar();renderAuth();renderAboutCafe();renderContacts();
 document.getElementById('member-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 setTimeout(initAPI, 500);
 </script>
