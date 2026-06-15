@@ -639,12 +639,13 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
   style.textContent=`
     .member-avatar-img,.post-avatar-img,.rank-avatar-img,.detail-avatar-img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;}
     .member-avatar,.post-avatar,.rank-avatar,.detail-avatar{overflow:hidden;}
-    .mv-toggle.offline{opacity:.32;filter:grayscale(1);border-color:rgba(80,80,80,0.3)!important;color:var(--text-muted)!important;background:rgba(30,30,30,0.3)!important;cursor:not-allowed!important;pointer-events:none;}
-    .mv-toggle.online{border-color:rgba(239,68,68,.7)!important;color:#ef4444!important;background:rgba(239,68,68,.12)!important;font-weight:700;}
-    .multiview-cell.offline-cell{opacity:.72;filter:grayscale(.45);}
+    .mv-toggle.offline{opacity:.38;border-color:rgba(80,80,80,0.35)!important;color:var(--text-muted)!important;background:rgba(30,30,30,0.25)!important;cursor:not-allowed!important;pointer-events:none!important;}
+    .mv-toggle.online{border-color:rgba(239,68,68,.7)!important;color:#ef4444!important;background:rgba(239,68,68,.12)!important;font-weight:700;cursor:pointer;}
+    .multiview-cell.offline-cell{opacity:.72;}
+    .multiview-cell iframe{overflow:hidden;}
     .multiview-cell.live-cell{background:#000;padding:0;}
     .mv-video-wrap{position:absolute;inset:0;overflow:hidden;background:#000;}
-    .mv-video-wrap iframe{position:absolute;left:0;top:-8%;width:100%;height:116%;border:0;}
+    .mv-video-wrap iframe{position:absolute;left:0;top:0;width:100%;height:100%;border:0;pointer-events:auto;}
     .mv-slot-tools{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:2;opacity:.18;transition:.2s;}
     .multiview-cell:hover .mv-slot-tools{opacity:1;}
     .mv-icon-btn{background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:6px;height:24px;min-width:24px;padding:0 6px;cursor:pointer;font-size:11px;}
@@ -659,7 +660,7 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
     #mv-fs-topbar button:hover{border-color:#22C55E;color:#4ADE80;}
     #mv-fullscreen-grid{flex:1;display:grid;grid-template-columns:repeat(2,1fr);gap:2px;background:#111;overflow:hidden;}
     .fs-cell{position:relative;background:#000;overflow:hidden;}
-    .fs-cell iframe{position:absolute;left:0;top:-8%;width:100%;height:116%;border:0;}
+    .fs-cell iframe{position:absolute;left:0;top:0;width:100%;height:100%;border:0;pointer-events:auto;}
     .fs-cell-badge{position:absolute;left:7px;bottom:7px;z-index:2;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:3px 9px;font-size:11px;color:#fff;display:flex;align-items:center;gap:5px;opacity:.3;transition:.2s;}
     .fs-cell:hover .fs-cell-badge{opacity:1;}
     .fs-cell-tools{position:absolute;top:7px;right:7px;z-index:2;display:flex;gap:4px;opacity:0;transition:.2s;}
@@ -762,8 +763,8 @@ window.updateMultiviewButtons=function(){
   const online=MEMBERS.map((m,i)=>({m,i,info:getLiveInfoByMember(m)})).filter(x=>x.info?.isLive);
   const offline=MEMBERS.map((m,i)=>({m,i,info:getLiveInfoByMember(m)})).filter(x=>!x.info?.isLive);
   const btn=x=>x.info?.isLive
-    ? `<button class="mv-toggle online" onclick="addToMultiview(${x.i})"><span class="live-dot" style="display:inline-block;width:7px;height:7px;background:#ef4444;border-radius:50%;margin-right:4px;animation:pulse 1.2s infinite;vertical-align:middle;"></span>${escapeHTML(x.m.name)}</button>`
-    : `<button class="mv-toggle offline" disabled title="오프라인 - 방송 중이 아닙니다">🔇 ${escapeHTML(x.m.name)}</button>`;
+    ? `<button class="mv-toggle online" onclick="addToMultiview(${x.i})"><span style="display:inline-block;width:7px;height:7px;background:#ef4444;border-radius:50%;margin-right:4px;animation:pulse 1.2s infinite;vertical-align:middle;"></span>${escapeHTML(x.m.name)}</button>`
+    : `<button class="mv-toggle offline" disabled><span style="display:inline-block;width:7px;height:7px;background:#555;border-radius:50%;margin-right:4px;vertical-align:middle;"></span>${escapeHTML(x.m.name)}</button>`;
   controls.innerHTML=[...online,...offline].map(btn).join('');
 };
 window.renderMultiview=function(){updateMultiviewButtons();renderMultiviewGridReal();};
@@ -843,7 +844,7 @@ window.renderMultiviewGridReal=function(){
     if(memberIdx===null) return `<div class="multiview-cell" data-slot="${slot}"><div class="mv-inner"><div style="font-size:28px;color:var(--text-muted)">+</div><div style="font-size:12px;color:var(--text-muted)">멤버를 선택해 추가하세요</div></div></div>`;
     const m=MEMBERS[memberIdx], info=getLiveInfoByMember(m);
     if(info?.isLive && info?.embedUrl){
-      return `<div class="multiview-cell live-cell" data-slot="${slot}"><div class="mv-video-wrap"><iframe src="${escapeHTML(info.embedUrl)}" allow="autoplay; fullscreen" allowfullscreen></iframe></div><div class="mv-name-badge"><span class="live-dot"></span> ${escapeHTML(m.name)}</div><div class="mv-slot-tools"><button class="mv-icon-btn" onclick="refreshMultiviewSlot(${slot})" title="새로고침">↻</button><button class="mv-icon-btn" onclick="removeFromMultiview(${slot})" title="제거">✕</button></div></div>`;
+      return `<div class="multiview-cell live-cell" data-slot="${slot}"><div class="mv-video-wrap"><iframe src="${escapeHTML(info.embedUrl)}" allow="autoplay; fullscreen" allowfullscreen scrolling="no"></iframe></div><div class="mv-name-badge"><span class="live-dot"></span> ${escapeHTML(m.name)}</div><div class="mv-slot-tools"><button class="mv-icon-btn" onclick="refreshMultiviewSlot(${slot})" title="새로고침">↻</button><button class="mv-icon-btn" onclick="removeFromMultiview(${slot})" title="제거">✕</button></div></div>`;
     }
     // 오프라인: 불 꺼진 회색 이름표
     return `<div class="multiview-cell offline-cell" data-slot="${slot}"><div class="mv-inner"><div style="font-size:32px;opacity:.3">${escapeHTML(m.emoji)}</div><div style="display:inline-flex;align-items:center;gap:5px;background:rgba(60,60,60,0.4);border:1px solid rgba(100,100,100,0.3);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#4A6A50;margin-top:4px">⚫ ${escapeHTML(m.name)}</div><div style="font-size:11px;color:var(--text-muted);margin-top:6px">오프라인</div></div><div class="mv-slot-tools"><button class="mv-icon-btn" onclick="removeFromMultiview(${slot})" title="제거">✕</button></div></div>`;
