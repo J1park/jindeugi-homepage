@@ -341,20 +341,34 @@ async function fetchLiveStatus() {
 
 async function fetchPosts() {
   try {
-    const res = await fetch(`${API_BASE}/api/posts?per_page=8`, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) throw new Error('API error');
+    const res = await fetch(`${API_BASE}/api/posts?per_page=5`);
+    if (!res.ok) throw new Error('API error ' + res.status);
+
     const data = await res.json();
     postsCache = data.posts || [];
 
-    // 게시글 페이지 업데이트
-    if (document.getElementById('page-posts').classList.contains('active')) {
-      renderRealPosts(postsCache, 'all');
-    }
     renderHomePosts();
+
+    if (document.getElementById('page-posts')?.classList.contains('active')) {
+      renderPosts('all');
+    }
+
     console.log(`✅ 게시글 업데이트: ${postsCache.length}개`);
     return data;
+
   } catch(e) {
-    console.warn('게시글 조회 실패:', e.message);
+    console.warn('게시글 조회 실패:', e);
+
+    const home = document.getElementById('home-posts');
+    if (home) {
+      home.innerHTML = `<div class="post-card" style="text-align:center;color:var(--text-muted)">게시글을 불러오지 못했습니다.</div>`;
+    }
+
+    const list = document.getElementById('posts-list');
+    if (list) {
+      list.innerHTML = `<div class="post-card" style="text-align:center;color:var(--text-muted)">게시글 API 연결 실패</div>`;
+    }
+
     return null;
   }
 }
@@ -532,7 +546,8 @@ async function initAPI() {
     return;
   }
   showToast('🔗 SOOP 연결 중...');
-  await Promise.all([fetchLiveStatus(), fetchPosts()]);
+  await fetchLiveStatus();
+  await fetchPosts();
 
   // 30초마다 라이브 상태 갱신
   setInterval(fetchLiveStatus, 30000);
