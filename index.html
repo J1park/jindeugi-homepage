@@ -182,8 +182,8 @@ nav a .nav-icon{font-size:15px;width:20px;text-align:center;}
         <button class="btn btn-primary" onclick="showPage('members')">👥 멤버 소개</button>
       </div>
       <div class="hero-stats">
-        <div class="stat"><div class="stat-num" id="stat-members">13</div><div class="stat-label">멤버</div></div>
-        <div class="stat"><div class="stat-num" id="stat-live">-</div><div class="stat-label">현재 라이브</div></div>
+        <div class="stat"><div class="stat-num">13</div><div class="stat-label">멤버</div></div>
+        <div class="stat"><div class="stat-num">3</div><div class="stat-label">현재 라이브</div></div>
         <div class="stat"><div class="stat-num">🐛</div><div class="stat-label">진드기</div></div>
       </div>
     </div>
@@ -341,34 +341,20 @@ async function fetchLiveStatus() {
 
 async function fetchPosts() {
   try {
-    const res = await fetch(`${API_BASE}/api/posts?per_page=5`);
-    if (!res.ok) throw new Error('API error ' + res.status);
-
+    const res = await fetch(`${API_BASE}/api/posts?per_page=8`, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error('API error');
     const data = await res.json();
     postsCache = data.posts || [];
 
-    renderHomePosts();
-
-    if (document.getElementById('page-posts')?.classList.contains('active')) {
-      renderPosts('all');
+    // 게시글 페이지 업데이트
+    if (document.getElementById('page-posts').classList.contains('active')) {
+      renderRealPosts(postsCache, 'all');
     }
-
+    renderHomePosts();
     console.log(`✅ 게시글 업데이트: ${postsCache.length}개`);
     return data;
-
   } catch(e) {
-    console.warn('게시글 조회 실패:', e);
-
-    const home = document.getElementById('home-posts');
-    if (home) {
-      home.innerHTML = `<div class="post-card" style="text-align:center;color:var(--text-muted)">게시글을 불러오지 못했습니다.</div>`;
-    }
-
-    const list = document.getElementById('posts-list');
-    if (list) {
-      list.innerHTML = `<div class="post-card" style="text-align:center;color:var(--text-muted)">게시글 API 연결 실패</div>`;
-    }
-
+    console.warn('게시글 조회 실패:', e.message);
     return null;
   }
 }
@@ -546,8 +532,7 @@ async function initAPI() {
     return;
   }
   showToast('🔗 SOOP 연결 중...');
-  await fetchLiveStatus();
-  await fetchPosts();
+  await Promise.all([fetchLiveStatus(), fetchPosts()]);
 
   // 30초마다 라이브 상태 갱신
   setInterval(fetchLiveStatus, 30000);
@@ -628,172 +613,184 @@ function doLogout(){loggedInMember=null;document.getElementById('auth-logged-out
 function renderAboutCafe(){document.getElementById('about-member-cafe').innerHTML=MEMBERS.map(m=>`<div class="card" style="text-align:center"><div style="font-size:26px;margin-bottom:7px">${m.emoji}</div><div style="font-weight:700;font-size:13px;margin-bottom:7px">${m.name}</div>${m.cafeUrl?`<a href="${m.cafeUrl}" target="_blank" class="btn btn-outline" style="font-size:11px;padding:5px 10px">☕ 카페 방문</a>`:`<div style="font-size:11px;color:var(--text-muted)">준비중</div>`}</div>`).join('');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
-// ============================================================
-// REAL API OVERRIDES: 최신 게시글 / 채널 게시글 / 실시간 멀티뷰
-// ============================================================
-function escapeHtml(v){
-  return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-}
-function getMemberBySoopId(soopId){return MEMBERS.find(m=>m.soopId===soopId);}
-function postTime(p){return p.date ? formatDate(p.date) : '';}
-function postTitle(p){return escapeHtml(p.title || p.content || '(제목 없음)');}
-function postBody(p){
-  const content = escapeHtml(p.content || '');
-  const title = escapeHtml(p.title || '');
-  if (!content || content === title) return '';
-  return `<div style="font-size:12px;color:var(--text-muted);margin-top:5px;line-height:1.5">${content}</div>`;
-}
-function renderPostCard(p, i){
-  const m = MEMBERS.find(mm => mm.name === p.member) || getMemberBySoopId(p.soopId) || {emoji:'🐛',color:['#15803D','#4ADE80'],name:p.member || p.soopId || 'SOOP'};
-  return `<div class="post-card">
-    <div class="post-header">
-      <div class="post-avatar" style="background:linear-gradient(135deg,${m.color[0]},${m.color[1]})">${m.emoji}</div>
-      <div class="post-meta">
-        <div class="post-author">${escapeHtml(p.member || m.name)}</div>
-        <div class="post-time">${postTime(p)}</div>
-      </div>
-      <div class="post-platform"><span class="tag">📡 SOOP</span></div>
-    </div>
-    <div class="post-content">${postTitle(p)}${postBody(p)}</div>
-    <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-muted)">
-      <span>👁 ${(p.viewCount || 0).toLocaleString()}</span>
-      <span>👍 UP ${(p.upCount || 0).toLocaleString()}</span>
-      ${p.url ? `<a href="${escapeHtml(p.url)}" target="_blank" style="margin-left:auto;color:var(--green-light);font-size:12px;text-decoration:none">원문 보기 ↗</a>` : ''}
-    </div>
-  </div>`;
+// ───────────────────────────────────────
+// API ONLY OVERRIDES: live / posts / multiview / profile image / hash routing
+// ───────────────────────────────────────
+(function injectApiOnlyStyles(){
+  const style=document.createElement('style');
+  style.textContent=`
+    .member-avatar-img,.post-avatar-img,.rank-avatar-img,.detail-avatar-img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;}
+    .member-avatar,.post-avatar,.rank-avatar,.detail-avatar{overflow:hidden;}
+    .mv-toggle.offline{opacity:.38;filter:grayscale(1);border-color:var(--border)!important;color:var(--text-muted)!important;background:transparent!important;}
+    .mv-toggle.online{border-color:rgba(239,68,68,.55)!important;color:var(--text)!important;background:rgba(239,68,68,.08)!important;}
+    .multiview-cell.offline-cell{opacity:.72;filter:grayscale(.45);}
+    .multiview-cell.live-cell{background:#000;padding:0;}
+    .mv-video-wrap{position:absolute;inset:0;overflow:hidden;background:#000;}
+    .mv-video-wrap iframe{position:absolute;left:0;top:-8%;width:100%;height:116%;border:0;}
+    .mv-slot-tools{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:2;opacity:.18;transition:.2s;}
+    .multiview-cell:hover .mv-slot-tools{opacity:1;}
+    .mv-icon-btn{background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:6px;height:24px;min-width:24px;padding:0 6px;cursor:pointer;font-size:11px;}
+    .mv-name-badge{position:absolute;left:6px;bottom:6px;z-index:2;background:rgba(0,0,0,.58);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:4px 8px;font-size:11px;color:#fff;opacity:.25;}
+    .multiview-cell:hover .mv-name-badge{opacity:1;}
+  `;
+  document.head.appendChild(style);
+})();
+
+function escapeHTML(v){return String(v ?? '').replace(/[&<>'"]/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[s]));}
+function getLiveInfoByMember(m){return liveData?.[m.soopId] || null;}
+function getProfileUrl(m){return getLiveInfoByMember(m)?.thumbnail || m.profileImage || '';}
+function avatarHTML(m, cls='member-avatar', extra=''){
+  const img=getProfileUrl(m);
+  return `<div class="${cls}${m.leader?' leader':''}" style="background:linear-gradient(135deg,${m.color[0]},${m.color[1]});${extra}">${img?`<img class="${cls}-img" src="${escapeHTML(img)}" alt="${escapeHTML(m.name)}" loading="lazy" onerror="this.remove();this.parentElement.textContent='${escapeHTML(m.emoji)}';">`:escapeHTML(m.emoji)}</div>`;
 }
 
-// 최신 게시글: 가짜 POSTS 사용 금지, postsCache/API만 표시
-window.renderHomePosts = function(){
-  const el = document.getElementById('home-posts');
-  if (!el) return;
-  if (!postsCache.length) {
-    el.innerHTML = `<div class="post-card" style="text-align:center;color:var(--text-muted)">SOOP 최신 게시글을 불러오는 중...</div>`;
-    return;
-  }
-  el.innerHTML = postsCache.slice(0,3).map(renderPostCard).join('') +
-    `<div style="text-align:center;margin-top:7px"><button class="btn btn-outline" onclick="showPage('posts')">게시글 더 보기 →</button></div>`;
+// F5 새로고침해도 현재 탭 유지
+window.showPage=function(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(a=>a.classList.remove('active'));
+  document.getElementById('page-'+id)?.classList.add('active');
+  document.getElementById('nav-'+id)?.classList.add('active');
+  const titles={home:'🏠 홈',about:'🐛 진드기 알아보기',members:'👥 멤버',multiview:'📺 실시간 멀티뷰',posts:'📋 채널 게시글',youtube:'▶️ 유튜브',ranking:'🏆 UP 랭킹',calendar:'📅 캘린더',contact:'✉️ 문의사항',auth:'🔐 멤버 인증'};
+  document.getElementById('topbar-title').textContent=titles[id]||id;
+  if(location.hash !== '#'+id) history.replaceState(null,'','#'+id);
+  if(id==='posts') renderRealPosts(postsCache || [], 'all');
+  if(id==='multiview') renderMultiviewGridReal();
 };
 
-// 채널 게시글: 가짜 POSTS 사용 금지, postsCache/API만 표시
-window.renderPosts = function(tab='all'){
-  const el = document.getElementById('posts-list');
-  if (!el) return;
-  if (!postsCache.length) {
-    el.innerHTML = `<div class="post-card" style="text-align:center;color:var(--text-muted)">SOOP 채널 게시글을 불러오는 중...</div>`;
-    fetchPosts();
-    return;
+window.fetchPosts=async function(){
+  try{
+    const results=await Promise.allSettled(MEMBERS.map(m=>
+      fetch(`${API_BASE}/api/posts/${m.soopId}?per_page=5`, {signal:AbortSignal.timeout(7000)})
+        .then(r=>{if(!r.ok)throw new Error(`${m.soopId} ${r.status}`);return r.json();})
+    ));
+    postsCache=[];
+    results.forEach((result,idx)=>{
+      if(result.status==='fulfilled' && Array.isArray(result.value.posts)){
+        const owner=MEMBERS[idx];
+        result.value.posts.forEach(p=>postsCache.push({...p, member: owner.name, soopId: owner.soopId, platform:'soop'}));
+      }
+    });
+    postsCache.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    renderHomePosts();
+    if(document.getElementById('page-posts')?.classList.contains('active')) renderRealPosts(postsCache,'all');
+    console.log(`✅ 게시글 업데이트: ${postsCache.length}개`);
+    return postsCache;
+  }catch(e){
+    console.error('게시글 조회 실패:', e);
+    const msg='<div class="post-card" style="text-align:center;color:var(--text-muted)">게시글을 불러오지 못했습니다.</div>';
+    const home=document.getElementById('home-posts'); if(home) home.innerHTML=msg;
+    const list=document.getElementById('posts-list'); if(list) list.innerHTML=msg;
+    return [];
   }
-  const filtered = tab === 'all' || tab === 'soop' ? postsCache : [];
-  if (!filtered.length) {
-    el.innerHTML = `<div class="post-card" style="text-align:center;color:var(--text-muted)">이 탭에 표시할 API 게시글이 없습니다.</div>`;
-    return;
-  }
-  el.innerHTML = filtered.map(renderPostCard).join('');
-};
-window.switchPostTab = function(el, tab){
-  document.querySelectorAll('#page-posts .tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  renderPosts(tab);
 };
 
-// 실시간 멀티뷰: liveData/API embedUrl만 사용. 오프라인은 iframe 안 띄움.
-window.renderMultiview = function(){
-  updateMultiviewButtons();
-  renderMultiviewGrid();
-};
-window.updateMultiviewButtons = function(){
-  const controls = document.getElementById('mv-controls');
-  if (!controls) return;
-  controls.innerHTML = MEMBERS.map((m,i)=>{
-    const info = liveData[m.soopId];
-    const isLive = !!info?.isLive;
-    return `<button class="mv-toggle${isLive?' active':''}" onclick="addToMultiview(${i})" style="${isLive?'border-color:rgba(239,68,68,0.7);color:var(--text)':'opacity:.45'}">${m.emoji} ${m.name}${isLive?' 🔴':''}</button>`;
-  }).join('');
-};
-window.addToMultiview = function(memberIdx){
-  const m = MEMBERS[memberIdx];
-  const info = liveData[m.soopId];
-  if (!info?.isLive || !info?.embedUrl) {
-    showToast(`${m.name}은(는) 현재 방송 중이 아닙니다`);
-    return;
-  }
-  const slot = activeMultiviewSlots.indexOf(null);
-  activeMultiviewSlots[slot === -1 ? 0 : slot] = memberIdx;
-  renderMultiviewGrid();
-  showToast(`📺 ${m.name} 방송 연결!`);
-};
-window.removeFromMultiview = function(slot){
-  activeMultiviewSlots[slot] = null;
-  renderMultiviewGrid();
-};
-window.renderMultiviewGrid = function(){
-  const grid = document.getElementById('multiview-grid');
-  if (!grid) return;
-  grid.innerHTML = activeMultiviewSlots.map((memberIdx,slot)=>{
-    if(memberIdx===null) return `<div class="multiview-cell"><div class="mv-inner"><div style="font-size:28px;color:var(--text-muted)">+</div><div style="font-size:12px;color:var(--text-muted)">방송 중인 멤버를 선택하세요</div></div></div>`;
-    const m = MEMBERS[memberIdx];
-    const info = liveData[m.soopId];
-    if(!info?.isLive || !info?.embedUrl) return `<div class="multiview-cell"><div class="mv-inner"><div style="font-size:32px">${m.emoji}</div><div style="font-size:13px;font-weight:700">${m.name}</div><div style="font-size:11px;color:var(--text-muted);margin-top:4px">현재 오프라인</div></div><button onclick="removeFromMultiview(${slot})" style="position:absolute;top:5px;right:5px;background:rgba(0,0,0,.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px">✕</button></div>`;
-    return `<div class="multiview-cell"><iframe src="${escapeHtml(info.embedUrl)}" allow="autoplay; fullscreen" allowfullscreen frameborder="0"></iframe><div style="position:absolute;top:5px;right:5px;display:flex;gap:3px"><span class="live-badge" style="font-size:10px"><span class="live-dot"></span>${escapeHtml(m.name)} · ${(info.viewers||0).toLocaleString()}명</span><button onclick="removeFromMultiview(${slot})" style="background:rgba(0,0,0,.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px">✕</button></div></div>`;
-  }).join('');
-};
-
-// fetch 함수도 API 성공 시 위 렌더러로 갱신
-const _realFetchLiveStatus = fetchLiveStatus;
-window.fetchLiveStatus = async function(){
-  const data = await _realFetchLiveStatus();
-  if (data) {
-    const memberEl = document.getElementById('stat-members');
-    if (memberEl) memberEl.textContent = data.members?.length || MEMBERS.length;
+window.fetchLiveStatus=async function(){
+  try{
+    const res=await fetch(`${API_BASE}/api/live`, {signal:AbortSignal.timeout(10000)});
+    if(!res.ok) throw new Error('API error '+res.status);
+    const data=await res.json();
+    liveData={};
+    (data.members||[]).forEach(m=>{liveData[m.soopId]=m;});
+    const liveEl=document.getElementById('stat-live'); if(liveEl) liveEl.textContent=data.liveCount||0;
+    updateLiveBadge(data.liveCount||0);
+    renderMembers();
+    updateMemberLiveStatus();
     updateMultiviewButtons();
-    renderMultiviewGrid();
-  }
-  return data;
-};
-const _realFetchPosts = fetchPosts;
-window.fetchPosts = async function(){
-  const data = await _realFetchPosts();
-  renderHomePosts();
-  if (document.getElementById('page-posts')?.classList.contains('active')) renderPosts('all');
-  return data;
+    renderMultiviewGridReal();
+    console.log(`✅ 라이브 상태 업데이트: ${data.liveCount||0}명 방송 중`);
+    return data;
+  }catch(e){console.warn('라이브 상태 조회 실패:', e.message);return null;}
 };
 
-function renderHomePosts() {
-  const el = document.getElementById('home-posts');
-  if (!el) return;
+window.renderMembers=function(){
+  const el=document.getElementById('members-grid'); if(!el) return;
+  el.innerHTML=MEMBERS.map((m,i)=>{
+    const info=getLiveInfoByMember(m);
+    return `<div class="member-card" onclick="openMemberModal(${i})" style="${info?.isLive?'border-color:rgba(239,68,68,.5)':''}">
+      ${avatarHTML(m,'member-avatar')}
+      <div class="member-name">${escapeHTML(m.name)} ${m.tag?`<span class="tag">${escapeHTML(m.tag)}</span>`:''}</div>
+      <div class="member-id">${escapeHTML(m.soopId)}</div>
+      ${info?.isLive?`<div class="live-badge live-badge-inline" style="display:inline-flex;margin-top:8px;font-size:10px"><span class="live-dot"></span>LIVE · ${(info.viewers||0).toLocaleString()}명</div>`:''}
+      <div class="member-links"><a class="member-link link-soop" href="${escapeHTML(m.soopUrl)}" target="_blank" onclick="event.stopPropagation()">📡 SOOP</a>${m.ytUrls.length?`<a class="member-link link-yt" href="${escapeHTML(m.ytUrls[0])}" target="_blank" onclick="event.stopPropagation()">▶ YT</a>`:''}${m.cafeUrl?`<a class="member-link link-cafe" href="${escapeHTML(m.cafeUrl)}" target="_blank" onclick="event.stopPropagation()">☕ 카페</a>`:''}</div>
+    </div>`;
+  }).join('');
+};
 
-  if (!postsCache || postsCache.length === 0) {
-    el.innerHTML = `<div class="post-card" style="text-align:center;color:var(--text-muted)">게시글이 없습니다.</div>`;
-    return;
-  }
+window.openMemberModal=function(i){
+  const m=MEMBERS[i]; const info=getLiveInfoByMember(m);
+  document.getElementById('modal-content').innerHTML=`<div style="display:flex;align-items:center;gap:18px;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border)">${avatarHTML(m,'detail-avatar')}<div><div style="font-size:20px;font-weight:800">${escapeHTML(m.name)}${m.tag?` <span class="tag">${escapeHTML(m.tag)}</span>`:''}</div><div style="font-size:13px;color:var(--text-muted);margin-top:3px">${escapeHTML(m.soopId)}</div>${info?.isLive?`<div class="live-badge" style="display:inline-flex;margin-top:8px;font-size:10px"><span class="live-dot"></span>LIVE</div>`:''}</div></div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase">링크</div><div style="display:flex;flex-direction:column;gap:7px"><a class="about-link-card" href="${escapeHTML(m.soopUrl)}" target="_blank">📡 SOOP 채널 (${escapeHTML(m.soopId)})</a>${m.ytUrls.map((url,j)=>`<a class="about-link-card" href="${escapeHTML(url)}" target="_blank">▶️ YouTube ${m.ytUrls.length>1?'채널 '+(j+1):'채널'}</a>`).join('')}${m.cafeUrl?`<a class="about-link-card" href="${escapeHTML(m.cafeUrl)}" target="_blank">☕ 개인 카페</a>`:'<div style="font-size:12px;color:var(--text-muted);padding:8px 0">카페 링크 준비중</div>'}</div><div style="margin-top:16px;display:flex;gap:8px"><button class="btn btn-mint" onclick="addToMultiview(${i});closeModal()">📺 멀티뷰에 추가</button><a href="${escapeHTML(m.soopUrl)}" target="_blank" class="btn btn-primary">📡 방송 보러가기</a></div>`;
+  document.getElementById('member-modal').classList.add('open');
+};
 
-  el.innerHTML = postsCache.slice(0, 3).map(p => {
-    const m = getMember(p.member);
-    return `
-      <div class="post-card" style="margin-bottom:8px">
-        <div class="post-header">
-          <div class="post-avatar" style="background:linear-gradient(135deg,${m.color[0]},${m.color[1]})">${m.emoji}</div>
-          <div class="post-meta">
-            <div class="post-author">${p.member}</div>
-            <div class="post-time">${p.date || ''}</div>
-          </div>
-          <span class="tag">📡 SOOP</span>
-        </div>
-        <div class="post-content">${p.title || p.content || '(내용 없음)'}</div>
-        ${p.url ? `<a href="${p.url}" target="_blank" style="color:var(--green-light);font-size:12px;text-decoration:none">원문 보기 ↗</a>` : ''}
-      </div>
-    `;
-  }).join('') + `<div style="text-align:center;margin-top:7px"><button class="btn btn-outline" onclick="showPage('posts')">게시글 더 보기 →</button></div>`;
-}
+window.updateMultiviewButtons=function(){
+  const controls=document.getElementById('mv-controls'); if(!controls) return;
+  const online=MEMBERS.map((m,i)=>({m,i,info:getLiveInfoByMember(m)})).filter(x=>x.info?.isLive);
+  const offline=MEMBERS.map((m,i)=>({m,i,info:getLiveInfoByMember(m)})).filter(x=>!x.info?.isLive);
+  const btn=x=>`<button class="mv-toggle ${x.info?.isLive?'online':'offline'}" onclick="addToMultiview(${x.i})">${x.info?.isLive?'🔴':'⚫'} ${escapeHTML(x.m.name)}</button>`;
+  controls.innerHTML=[...online,...offline].map(btn).join('');
+};
+window.renderMultiview=function(){updateMultiviewButtons();renderMultiviewGridReal();};
+window.addToMultiview=function(memberIdx){
+  const slot=activeMultiviewSlots.indexOf(null);
+  activeMultiviewSlots[slot===-1?0:slot]=memberIdx;
+  renderMultiviewGridReal();
+  const m=MEMBERS[memberIdx], info=getLiveInfoByMember(m);
+  showToast(info?.isLive?`📺 ${m.name} 방송 연결!`:`${m.name} 오프라인으로 추가됨`);
+};
+window.removeFromMultiview=function(slot){activeMultiviewSlots[slot]=null;renderMultiviewGridReal();};
+window.refreshMultiviewSlot=function(slot){
+  const cell=document.querySelector(`#multiview-grid [data-slot="${slot}"]`);
+  const iframe=cell?.querySelector('iframe');
+  if(iframe){ const src=iframe.src; iframe.src='about:blank'; setTimeout(()=>iframe.src=src,80); showToast(`${slot+1}번 화면 새로고침`); }
+};
+window.renderMultiviewGridReal=function(){
+  const grid=document.getElementById('multiview-grid'); if(!grid) return;
+  grid.innerHTML=activeMultiviewSlots.map((memberIdx,slot)=>{
+    if(memberIdx===null) return `<div class="multiview-cell" data-slot="${slot}"><div class="mv-inner"><div style="font-size:28px;color:var(--text-muted)">+</div><div style="font-size:12px;color:var(--text-muted)">멤버를 선택해 추가하세요</div></div></div>`;
+    const m=MEMBERS[memberIdx], info=getLiveInfoByMember(m);
+    if(info?.isLive && info?.embedUrl){
+      return `<div class="multiview-cell live-cell" data-slot="${slot}"><div class="mv-video-wrap"><iframe src="${escapeHTML(info.embedUrl)}" allow="autoplay; fullscreen" allowfullscreen></iframe></div><div class="mv-name-badge"><span class="live-dot"></span> ${escapeHTML(m.name)}</div><div class="mv-slot-tools"><button class="mv-icon-btn" onclick="refreshMultiviewSlot(${slot})">↻</button><button class="mv-icon-btn" onclick="removeFromMultiview(${slot})">✕</button></div></div>`;
+    }
+    return `<div class="multiview-cell offline-cell" data-slot="${slot}"><div class="mv-inner"><div style="font-size:32px;opacity:.45">${escapeHTML(m.emoji)}</div><div style="font-size:13px;font-weight:700;color:var(--text-muted)">${escapeHTML(m.name)}</div><div style="font-size:11px;color:var(--text-muted);margin-top:4px">현재 오프라인</div></div><div class="mv-slot-tools"><button class="mv-icon-btn" onclick="removeFromMultiview(${slot})">✕</button></div></div>`;
+  }).join('');
+};
 
-function renderPosts(tab = 'all') {
-  renderRealPosts(postsCache || [], tab);
-}
+window.renderRealPosts=function(posts,tab='all'){
+  const list=document.getElementById('posts-list'); if(!list) return;
+  const filtered=(tab==='all'?posts:posts.filter(p=>p.platform===tab));
+  if(!filtered.length){list.innerHTML='<div class="post-card" style="text-align:center;color:var(--text-muted)">표시할 게시글이 없습니다.</div>';return;}
+  list.innerHTML=filtered.map(p=>{
+    const m=MEMBERS.find(x=>x.name===p.member)||getMember(p.member);
+    return `<div class="post-card"><div class="post-header">${avatarHTML(m,'post-avatar')}<div class="post-meta"><div class="post-author">${escapeHTML(p.member)}</div><div class="post-time">${escapeHTML(formatDate(p.date)||'')}</div></div><div class="post-platform"><span class="tag">📡 SOOP</span></div></div><div class="post-content">${escapeHTML(p.title||p.content||'(내용 없음)')}</div><div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-muted)"><span>👁 ${(p.viewCount||0).toLocaleString()}</span>${p.url?`<a href="${escapeHTML(p.url)}" target="_blank" style="margin-left:auto;color:var(--green-light);font-size:12px;text-decoration:none">원문 보기 ↗</a>`:''}</div></div>`;
+  }).join('');
+};
+window.renderPosts=function(tab='all'){renderRealPosts(postsCache||[],tab);};
+window.switchPostTab=function(el,tab){document.querySelectorAll('#page-posts .tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');renderRealPosts(postsCache||[],tab);};
+window.renderHomePosts=function(){
+  const el=document.getElementById('home-posts'); if(!el) return;
+  if(!postsCache?.length){el.innerHTML='<div class="post-card" style="text-align:center;color:var(--text-muted)">표시할 게시글이 없습니다.</div>';return;}
+  el.innerHTML=postsCache.slice(0,3).map(p=>{
+    const m=MEMBERS.find(x=>x.name===p.member)||getMember(p.member);
+    return `<div class="post-card" style="margin-bottom:8px"><div class="post-header">${avatarHTML(m,'post-avatar')}<div class="post-meta"><div class="post-author">${escapeHTML(p.member)}</div><div class="post-time">${escapeHTML(formatDate(p.date)||'')}</div></div><span class="tag">📡 SOOP</span></div><div class="post-content">${escapeHTML(p.title||p.content||'(내용 없음)')}</div>${p.url?`<a href="${escapeHTML(p.url)}" target="_blank" style="color:var(--green-light);font-size:12px;text-decoration:none">원문 보기 ↗</a>`:''}</div>`;
+  }).join('')+`<div style="text-align:center;margin-top:7px"><button class="btn btn-outline" onclick="showPage('posts')">게시글 더 보기 →</button></div>`;
+};
+
+window.initAPI=async function(){
+  showToast('🔗 SOOP 연결 중...');
+  await fetchLiveStatus();
+  await fetchPosts();
+  setInterval(fetchLiveStatus,30000);
+  setInterval(fetchPosts,300000);
+};
 
 renderMembers();renderMultiview();renderYoutube('all');renderRanking();renderCalendar();renderAuth();renderAboutCafe();renderContacts();
+const initialPage=(location.hash||'#home').replace('#','');
+showPage(document.getElementById('page-'+initialPage)?initialPage:'home');
+document.getElementById('home-posts').innerHTML='<div class="post-card" style="text-align:center;color:var(--text-muted)">SOOP 최신 게시글을 불러오는 중...</div>';
+document.getElementById('posts-list').innerHTML='<div class="post-card" style="text-align:center;color:var(--text-muted)">SOOP 채널 게시글을 불러오는 중...</div>';
 document.getElementById('member-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
-setTimeout(initAPI, 500);
+setTimeout(initAPI,500);
+
 </script>
 </body>
 </html>
