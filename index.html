@@ -475,7 +475,12 @@ function renderMultiviewGridReal() {
     const info = liveData[m.soopId];
     if (info?.isLive && info?.embedUrl) {
       return `<div class="multiview-cell">
-        <iframe src="${info.embedUrl}" allow="autoplay; fullscreen" allowfullscreen frameborder="0"></iframe>
+        <iframe
+          src="${member.embedUrl}?quality=1080p&autoPlay=true"
+          allow="autoplay; fullscreen"
+          frameborder="0"
+          scrolling="no"
+        ></iframe>
         <div style="position:absolute;top:5px;right:5px;display:flex;gap:3px">
           <span class="live-badge" style="font-size:10px"><span class="live-dot"></span>${m.name} · ${(info.viewers||0).toLocaleString()}명</span>
           <button onclick="removeFromMultiview(${slot})" style="background:rgba(0,0,0,0.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px">✕</button>
