@@ -406,14 +406,21 @@ function updateMemberLiveStatus() {
 }
 
 function updateMultiviewButtons() {
+  window.updateMultiviewButtons && window.updateMultiviewButtons !== updateMultiviewButtons
+    ? window.updateMultiviewButtons()
+    : _renderMvControls();
+}
+function _renderMvControls(){
   const controls = document.getElementById('mv-controls');
   if (!controls) return;
   controls.innerHTML = MEMBERS.map((m, i) => {
     const info = liveData[m.soopId];
     const isLive = info?.isLive;
-    return `<button class="mv-toggle${isLive ? ' live-active' : ''}" onclick="addToMultiview(${i})" style="${isLive ? 'border-color:rgba(239,68,68,0.5);color:var(--text)' : 'opacity:0.5'}">
-      ${m.emoji} ${m.name}${isLive ? ' 🔴' : ''}
-    </button>`;
+    if(isLive){
+      return `<button class="mv-toggle online" onclick="addToMultiview(${i})"><span style="display:inline-block;width:7px;height:7px;background:#ef4444;border-radius:50%;margin-right:4px;animation:pulse 1.2s infinite;vertical-align:middle;"></span>${m.name}</button>`;
+    } else {
+      return `<button class="mv-toggle offline" disabled><span style="display:inline-block;width:7px;height:7px;background:#555;border-radius:50%;margin-right:4px;vertical-align:middle;"></span>${m.name}</button>`;
+    }
   }).join('');
 }
 
@@ -604,7 +611,7 @@ function getMember(name){return MEMBERS.find(m=>m.name===name)||{emoji:'?',color
 function renderMembers(){document.getElementById('members-grid').innerHTML=MEMBERS.map((m,i)=>`<div class="member-card" onclick="openMemberModal(${i})"><div class="member-avatar${m.leader?' leader':''}" style="background:linear-gradient(135deg,${m.color[0]},${m.color[1]})">${m.emoji}</div><div class="member-name">${m.name} ${m.tag?`<span class="tag">${m.tag}`:''}</div><div class="member-id">${m.soopId}</div><div class="member-links"><a class="member-link link-soop" href="${m.soopUrl}" target="_blank" onclick="event.stopPropagation()">📡 SOOP</a>${m.ytUrls.length?`<a class="member-link link-yt" href="${m.ytUrls[0]}" target="_blank" onclick="event.stopPropagation()">▶ YT</a>`:''} ${m.cafeUrl?`<a class="member-link link-cafe" href="${m.cafeUrl}" target="_blank" onclick="event.stopPropagation()">☕ 카페</a>`:''}</div></div>`).join('');}
 function openMemberModal(i){const m=MEMBERS[i];document.getElementById('modal-content').innerHTML=`<div style="display:flex;align-items:center;gap:18px;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border)"><div class="detail-avatar" style="background:linear-gradient(135deg,${m.color[0]},${m.color[1]})">${m.emoji}</div><div><div style="font-size:20px;font-weight:800">${m.name}${m.tag?` <span class="tag">${m.tag}</span>`:''}</div><div style="font-size:13px;color:var(--text-muted);margin-top:3px">${m.soopId}</div></div></div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase">링크</div><div style="display:flex;flex-direction:column;gap:7px"><a class="about-link-card" href="${m.soopUrl}" target="_blank">📡 SOOP 채널 (${m.soopId})</a>${m.ytUrls.map((url,j)=>`<a class="about-link-card" href="${url}" target="_blank">▶️ YouTube ${m.ytUrls.length>1?'채널 '+(j+1):'채널'}</a>`).join('')}${m.cafeUrl?`<a class="about-link-card" href="${m.cafeUrl}" target="_blank">☕ 개인 카페</a>`:'<div style="font-size:12px;color:var(--text-muted);padding:8px 0">카페 링크 준비중</div>'}</div><div style="margin-top:16px;display:flex;gap:8px"><button class="btn btn-mint" onclick="addToMultiview(${i});closeModal()">📺 멀티뷰에 추가</button><a href="${m.soopUrl}" target="_blank" class="btn btn-primary">📡 방송 보러가기</a></div>`;document.getElementById('member-modal').classList.add('open');}
 function closeModal(){document.getElementById('member-modal').classList.remove('open');}
-function renderMultiview(){document.getElementById('mv-controls').innerHTML=MEMBERS.map((m,i)=>`<button class="mv-toggle" onclick="addToMultiview(${i})">${m.emoji} ${m.name}</button>`).join('');renderMultiviewGrid();}
+function renderMultiview(){_renderMvControls();renderMultiviewGrid();}
 function addToMultiview(memberIdx){const slot=activeMultiviewSlots.indexOf(null);if(slot===-1)activeMultiviewSlots[0]=memberIdx;else activeMultiviewSlots[slot]=memberIdx;renderMultiviewGrid();showToast(`${MEMBERS[memberIdx].name}을(를) 멀티뷰에 추가했습니다!`);}
 function removeFromMultiview(slot){activeMultiviewSlots[slot]=null;renderMultiviewGrid();}
 function renderMultiviewGrid(){document.getElementById('multiview-grid').innerHTML=activeMultiviewSlots.map((memberIdx,slot)=>{if(memberIdx===null)return`<div class="multiview-cell"><div class="mv-inner"><div style="font-size:28px;color:var(--text-muted)">+</div><div style="font-size:12px;color:var(--text-muted)">멤버를 선택해 추가하세요</div></div></div>`;const m=MEMBERS[memberIdx];return`<div class="multiview-cell"><iframe src="${m.soopUrl}" allow="autoplay" allowfullscreen></iframe><div style="position:absolute;top:5px;right:5px;display:flex;gap:3px"><span class="live-badge" style="font-size:10px"><span class="live-dot"></span>${m.name}</span><button onclick="removeFromMultiview(${slot})" style="background:rgba(0,0,0,0.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px">✕</button></div></div>`;}).join('');}
@@ -645,7 +652,7 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
     .multiview-cell iframe{overflow:hidden;}
     .multiview-cell.live-cell{background:#000;padding:0;}
     .mv-video-wrap{position:absolute;inset:0;overflow:hidden;background:#000;}
-    .mv-video-wrap iframe{position:absolute;left:0;top:0;width:100%;height:100%;border:0;pointer-events:auto;}
+    .mv-video-wrap iframe{position:absolute;left:0;top:-42px;width:100%;height:calc(100% + 82px);border:0;pointer-events:auto;}
     .mv-slot-tools{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:2;opacity:.18;transition:.2s;}
     .multiview-cell:hover .mv-slot-tools{opacity:1;}
     .mv-icon-btn{background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:6px;height:24px;min-width:24px;padding:0 6px;cursor:pointer;font-size:11px;}
@@ -660,7 +667,7 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
     #mv-fs-topbar button:hover{border-color:#22C55E;color:#4ADE80;}
     #mv-fullscreen-grid{flex:1;display:grid;grid-template-columns:repeat(2,1fr);gap:2px;background:#111;overflow:hidden;}
     .fs-cell{position:relative;background:#000;overflow:hidden;}
-    .fs-cell iframe{position:absolute;left:0;top:0;width:100%;height:100%;border:0;pointer-events:auto;}
+    .fs-cell iframe{position:absolute;left:0;top:-42px;width:100%;height:calc(100% + 82px);border:0;pointer-events:auto;}
     .fs-cell-badge{position:absolute;left:7px;bottom:7px;z-index:2;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:3px 9px;font-size:11px;color:#fff;display:flex;align-items:center;gap:5px;opacity:.3;transition:.2s;}
     .fs-cell:hover .fs-cell-badge{opacity:1;}
     .fs-cell-tools{position:absolute;top:7px;right:7px;z-index:2;display:flex;gap:4px;opacity:0;transition:.2s;}
@@ -815,7 +822,7 @@ window.renderMvFullscreen=function(){
     const m=MEMBERS[memberIdx], info=getLiveInfoByMember(m);
     if(info?.isLive && info?.embedUrl){
       return `<div class="fs-cell" data-slot="${slot}">
-        <iframe src="${escapeHTML(info.embedUrl)}" allow="autoplay; fullscreen" allowfullscreen scrolling="no"></iframe>
+        <iframe src="${escapeHTML(info.embedUrl)}?autoPlay=true&mute=0&quality=hd&controls=0" allow="autoplay; fullscreen" allowfullscreen scrolling="no"></iframe>
         <div class="fs-cell-badge"><span class="live-dot"></span>${escapeHTML(m.name)}</div>
         <div class="fs-cell-tools">
           <button class="fs-btn" onclick="refreshFsSlot(${slot})" title="새로고침">↻</button>
@@ -844,7 +851,8 @@ window.renderMultiviewGridReal=function(){
     if(memberIdx===null) return `<div class="multiview-cell" data-slot="${slot}"><div class="mv-inner"><div style="font-size:28px;color:var(--text-muted)">+</div><div style="font-size:12px;color:var(--text-muted)">멤버를 선택해 추가하세요</div></div></div>`;
     const m=MEMBERS[memberIdx], info=getLiveInfoByMember(m);
     if(info?.isLive && info?.embedUrl){
-      return `<div class="multiview-cell live-cell" data-slot="${slot}"><div class="mv-video-wrap"><iframe src="${escapeHTML(info.embedUrl)}" allow="autoplay; fullscreen" allowfullscreen scrolling="no"></iframe></div><div class="mv-name-badge"><span class="live-dot"></span> ${escapeHTML(m.name)}</div><div class="mv-slot-tools"><button class="mv-icon-btn" onclick="refreshMultiviewSlot(${slot})" title="새로고침">↻</button><button class="mv-icon-btn" onclick="removeFromMultiview(${slot})" title="제거">✕</button></div></div>`;
+      const embedSrc = escapeHTML(info.embedUrl) + '?autoPlay=true&mute=0&quality=hd&controls=0';
+      return `<div class="multiview-cell live-cell" data-slot="${slot}"><div class="mv-video-wrap"><iframe src="${embedSrc}" allow="autoplay; fullscreen" allowfullscreen scrolling="no"></iframe></div><div class="mv-name-badge"><span class="live-dot"></span> ${escapeHTML(m.name)}</div><div class="mv-slot-tools"><button class="mv-icon-btn" onclick="refreshMultiviewSlot(${slot})" title="새로고침">↻</button><button class="mv-icon-btn" onclick="removeFromMultiview(${slot})" title="제거">✕</button></div></div>`;
     }
     // 오프라인: 불 꺼진 회색 이름표
     return `<div class="multiview-cell offline-cell" data-slot="${slot}"><div class="mv-inner"><div style="font-size:32px;opacity:.3">${escapeHTML(m.emoji)}</div><div style="display:inline-flex;align-items:center;gap:5px;background:rgba(60,60,60,0.4);border:1px solid rgba(100,100,100,0.3);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#4A6A50;margin-top:4px">⚫ ${escapeHTML(m.name)}</div><div style="font-size:11px;color:var(--text-muted);margin-top:6px">오프라인</div></div><div class="mv-slot-tools"><button class="mv-icon-btn" onclick="removeFromMultiview(${slot})" title="제거">✕</button></div></div>`;
